@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { pool } from "@/lib/db";
 import { getProject } from "@/lib/queries";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { costSchema, uuidSchema } from "@/lib/validations";
 
 export type CostFormState = {
@@ -36,22 +36,18 @@ export async function createCost(
   }
 
   const cost = parsed.data;
-  await pool.query(
-    `insert into costs
-       (project_id, category, supplier, description, amount_cents, vat_cents,
-        cost_date, source, status)
-     values ($1, $2, $3, $4, $5, $6, $7, 'manual', $8)`,
-    [
-      projectId,
-      cost.category,
-      cost.supplier,
-      cost.description,
-      cost.amountCents,
-      cost.vatCents,
-      cost.costDate,
-      cost.status,
-    ],
-  );
+  const { error } = await getSupabaseAdmin().from("costs").insert({
+    project_id: projectId,
+    category: cost.category,
+    supplier: cost.supplier,
+    description: cost.description,
+    amount_cents: cost.amountCents,
+    vat_cents: cost.vatCents,
+    cost_date: cost.costDate,
+    source: "manual",
+    status: cost.status,
+  });
+  if (error) throw new Error(error.message, { cause: error });
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
@@ -74,25 +70,23 @@ export async function updateCost(
   }
 
   const cost = parsed.data;
-  const result = await pool.query(
-    `update costs
-     set category = $3, supplier = $4, description = $5, amount_cents = $6,
-         vat_cents = $7, cost_date = $8, status = $9
-     where id = $1 and project_id = $2`,
-    [
-      costId,
-      projectId,
-      cost.category,
-      cost.supplier,
-      cost.description,
-      cost.amountCents,
-      cost.vatCents,
-      cost.costDate,
-      cost.status,
-    ],
-  );
+  const { data, error } = await getSupabaseAdmin()
+    .from("costs")
+    .update({
+      category: cost.category,
+      supplier: cost.supplier,
+      description: cost.description,
+      amount_cents: cost.amountCents,
+      vat_cents: cost.vatCents,
+      cost_date: cost.costDate,
+      status: cost.status,
+    })
+    .eq("id", costId)
+    .eq("project_id", projectId)
+    .select("id");
+  if (error) throw new Error(error.message, { cause: error });
 
-  if (result.rowCount === 0) {
+  if (data.length === 0) {
     return { formError: "Cost not found." };
   }
 

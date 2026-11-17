@@ -1,5 +1,11 @@
 import "server-only";
-import { pool } from "@/lib/db";
+import type { PostgrestError } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
+type CostRow = Database["public"]["Tables"]["costs"]["Row"];
+type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
 
 export type ProjectSummary = {
   id: string;
@@ -32,74 +38,60 @@ export type Project = {
   status: string;
 };
 
-// pg returns bigint columns as strings, so convert them here.
 export async function listProjects(): Promise<ProjectSummary[]> {
-  const { rows } = await pool.query(`
-    select p.id, p.name, p.client_name, p.budget_cents, p.status,
-           coalesce(sum(c.amount_cents), 0) as spent_cents,
-           count(c.id)::int as cost_count
-    from projects p
-    left join costs c on c.project_id = p.id
-    group by p.id
-    order by p.created_at desc, p.name
-  `);
+  const rows = unwrap(
+    await getSupabaseAdmin()
+      .from("projects")
+      .select("id, name, client_name, budget_cents, status, costs(amount_cents)")
+      .order("created_at", { ascending: false })
+      .order("name"),
+  ) ?? [];
 
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
     clientName: row.client_name,
-    budgetCents: Number(row.budget_cents),
+    budgetCents: row.budget_cents,
     status: row.status,
-    spentCents: Number(row.spent_cents),
-    costCount: row.cost_count,
+    spentCents: row.costs.reduce((sum, cost) => sum + cost.amount_cents, 0),
+    costCount: row.costs.length,
   }));
 }
 
 export async function getProject(projectId: string): Promise<Project | null> {
-  const { rows } = await pool.query(
-    `select id, name, client_name, budget_cents, status from projects where id = $1`,
-    [projectId],
+  const row = unwrap(
+    await getSupabaseAdmin()
+      .from("projects")
+      .select("id, name, client_name, budget_cents, status")
+      .eq("id", projectId)
+      .maybeSingle(),
   );
-  const row = rows[0];
-  if (!row) return null;
-
-  return {
-    id: row.id,
-    name: row.name,
-    clientName: row.client_name,
-    budgetCents: Number(row.budget_cents),
-    status: row.status,
-  };
+  return row ? toProject(row) : null;
 }
 
 export async function listCosts(projectId: string): Promise<Cost[]> {
-  const { rows } = await pool.query(
-    `select * from costs where project_id = $1 order by cost_date desc, created_at desc`,
-    [projectId],
-  );
+  const rows = unwrap(
+    await getSupabaseAdmin()
+      .from("costs")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("cost_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ) ?? [];
   return rows.map(toCost);
 }
 
 export async function getCost(projectId: string, costId: string): Promise<Cost | null> {
-  const { rows } = await pool.query(
-    `select * from costs where project_id = $1 and id = $2`,
-    [projectId, costId],
+  const row = unwrap(
+    await getSupabaseAdmin()
+      .from("costs")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("id", costId)
+      .maybeSingle(),
   );
-  return rows[0] ? toCost(rows[0]) : null;
+  return row ? toCost(row) : null;
 }
-
-type CostRow = {
-  id: string;
-  project_id: string;
-  category: string;
-  supplier: string;
-  description: string;
-  amount_cents: string;
-  vat_cents: string;
-  cost_date: string;
-  source: string;
-  status: string;
-};
 
 export type Document = {
   id: string;
@@ -128,34 +120,52 @@ export type RawExtraction = {
   error?: string;
 };
 
-type DocumentRow = {
-  id: string;
-  project_id: string;
-  file_url: string;
-  status: string;
-  confidence: string | null;
-  raw_extraction: RawExtraction | null;
-};
-
 export async function listDocuments(projectId: string): Promise<Document[]> {
-  const { rows } = await pool.query(
-    `select * from documents where project_id = $1 order by created_at desc`,
-    [projectId],
-  );
+  const rows = unwrap(
+    await getSupabaseAdmin()
+      .from("documents")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+  ) ?? [];
   return rows.map(toDocument);
 }
 
 export async function getDocument(projectId: string, documentId: string): Promise<Document | null> {
-  const { rows } = await pool.query(
-    `select * from documents where project_id = $1 and id = $2`,
-    [projectId, documentId],
+  const row = unwrap(
+    await getSupabaseAdmin()
+      .from("documents")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("id", documentId)
+      .maybeSingle(),
   );
-  return rows[0] ? toDocument(rows[0]) : null;
+  return row ? toDocument(row) : null;
 }
 
 export async function getDocumentById(documentId: string): Promise<Document | null> {
-  const { rows } = await pool.query(`select * from documents where id = $1`, [documentId]);
-  return rows[0] ? toDocument(rows[0]) : null;
+  const row = unwrap(
+    await getSupabaseAdmin().from("documents").select("*").eq("id", documentId).maybeSingle(),
+  );
+  return row ? toDocument(row) : null;
+}
+
+// Supabase returns an error object instead of throwing, so turn it into an exception.
+function unwrap<T>({ data, error }: { data: T | null; error: PostgrestError | null }): T | null {
+  if (error) throw new Error(error.message, { cause: error });
+  return data;
+}
+
+type ProjectFields = Pick<ProjectRow, "id" | "name" | "client_name" | "budget_cents" | "status">;
+
+function toProject(row: ProjectFields): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    clientName: row.client_name,
+    budgetCents: row.budget_cents,
+    status: row.status,
+  };
 }
 
 function toDocument(row: DocumentRow): Document {
@@ -164,8 +174,8 @@ function toDocument(row: DocumentRow): Document {
     projectId: row.project_id,
     fileUrl: row.file_url,
     status: row.status,
-    confidence: row.confidence === null ? null : Number(row.confidence),
-    rawExtraction: row.raw_extraction,
+    confidence: row.confidence,
+    rawExtraction: row.raw_extraction as RawExtraction | null,
   };
 }
 
@@ -176,8 +186,8 @@ function toCost(row: CostRow): Cost {
     category: row.category,
     supplier: row.supplier,
     description: row.description,
-    amountCents: Number(row.amount_cents),
-    vatCents: Number(row.vat_cents),
+    amountCents: row.amount_cents,
+    vatCents: row.vat_cents,
     costDate: row.cost_date,
     source: row.source,
     status: row.status,

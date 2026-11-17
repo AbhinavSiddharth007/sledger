@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { pool } from "@/lib/db";
 import { EXTRACTION_MODEL, createExtractionClient, extractReceipt } from "@/lib/receipts/extract";
 import { validateReceipt } from "@/lib/receipts/schema";
 import { getProject } from "@/lib/queries";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
 import { costSchema, uuidSchema } from "@/lib/validations";
 import type { CostFormState } from "@/app/projects/[projectId]/costs/actions";
@@ -38,30 +38,29 @@ export async function uploadReceipt(
   const data = Buffer.from(await file.arrayBuffer());
   const fileUrl = await saveUpload(projectId, file.type, data);
 
-  const { rows } = await pool.query(
-    `insert into documents (project_id, file_url, status) values ($1, $2, 'pending') returning id`,
-    [projectId, fileUrl],
-  );
-  const documentId: string = rows[0].id;
+  const admin = getSupabaseAdmin();
+  const { data: inserted, error: insertError } = await admin
+    .from("documents")
+    .insert({ project_id: projectId, file_url: fileUrl, status: "pending" })
+    .select("id")
+    .single();
+  if (insertError) throw new Error(insertError.message, { cause: insertError });
+  const documentId = inserted.id;
 
   const result = await extractReceipt(createExtractionClient(), { data, mediaType: file.type });
 
+  let update;
   if (result.ok) {
     const validation = validateReceipt(result.receipt);
     const raw = { model: EXTRACTION_MODEL, attempts: result.attempts, output: result.receipt, validation };
     // The schema allows any number, so clamp before it reaches the numeric(4,3) column.
     const confidence = Math.min(1, Math.max(0, result.receipt.confidence));
-    await pool.query(
-      `update documents set raw_extraction = $2, confidence = $3, status = 'extracted' where id = $1`,
-      [documentId, JSON.stringify(raw), confidence],
-    );
+    update = { raw_extraction: raw, confidence, status: "extracted" };
   } else {
-    const raw = { model: EXTRACTION_MODEL, attempts: result.attempts, error: result.error };
-    await pool.query(`update documents set raw_extraction = $2 where id = $1`, [
-      documentId,
-      JSON.stringify(raw),
-    ]);
+    update = { raw_extraction: { model: EXTRACTION_MODEL, attempts: result.attempts, error: result.error } };
   }
+  const { error: updateError } = await admin.from("documents").update(update).eq("id", documentId);
+  if (updateError) throw new Error(updateError.message, { cause: updateError });
 
   revalidatePath(`/projects/${projectId}`);
   redirect(`/projects/${projectId}/documents/${documentId}`);
@@ -85,44 +84,23 @@ export async function confirmReceipt(
     };
   }
 
-  const cost = parsed.data;
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
+  // One transaction in Postgres: claims the document and inserts the cost, or neither.
+  const { data: costId, error } = await getSupabaseAdmin().rpc("confirm_receipt", {
+    p_project_id: projectId,
+    p_document_id: documentId,
+    p_category: parsed.data.category,
+    p_supplier: parsed.data.supplier,
+    p_description: parsed.data.description,
+    p_amount_cents: parsed.data.amountCents,
+    p_vat_cents: parsed.data.vatCents,
+    p_cost_date: parsed.data.costDate,
+    p_status: parsed.data.status,
+  });
+  if (error) throw new Error(error.message, { cause: error });
 
-    const claimed = await client.query(
-      `update documents set status = 'confirmed'
-       where id = $1 and project_id = $2 and status in ('pending', 'extracted')`,
-      [documentId, projectId],
-    );
-    if (claimed.rowCount === 0) {
-      await client.query("rollback");
-      return { formError: "This document was already confirmed or rejected." };
-    }
-
-    await client.query(
-      `insert into costs
-         (project_id, category, supplier, description, amount_cents, vat_cents,
-          cost_date, source, status)
-       values ($1, $2, $3, $4, $5, $6, $7, 'ai_extracted', $8)`,
-      [
-        projectId,
-        cost.category,
-        cost.supplier,
-        cost.description,
-        cost.amountCents,
-        cost.vatCents,
-        cost.costDate,
-        cost.status,
-      ],
-    );
-
-    await client.query("commit");
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
+  // The function returns null when the document was not pending or extracted.
+  if (costId === null) {
+    return { formError: "This document was already confirmed or rejected." };
   }
 
   revalidatePath(`/projects/${projectId}`);
@@ -135,11 +113,13 @@ export async function rejectReceipt(projectId: string, documentId: string) {
     return;
   }
 
-  await pool.query(
-    `update documents set status = 'rejected'
-     where id = $1 and project_id = $2 and status in ('pending', 'extracted')`,
-    [documentId, projectId],
-  );
+  const { error } = await getSupabaseAdmin()
+    .from("documents")
+    .update({ status: "rejected" })
+    .eq("id", documentId)
+    .eq("project_id", projectId)
+    .in("status", ["pending", "extracted"]);
+  if (error) throw new Error(error.message, { cause: error });
 
   revalidatePath(`/projects/${projectId}`);
   redirect(`/projects/${projectId}`);
