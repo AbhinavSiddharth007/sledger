@@ -1,6 +1,6 @@
--- Sledger schema. Requires PostgreSQL 13+ (gen_random_uuid is built in).
+-- Sledger schema. Supabase runs PostgreSQL 15+ (gen_random_uuid is built in).
 -- All money is integer cents in EUR. Never store floats for money.
--- Every table has created_at. Statements are idempotent so the seed can re-run them.
+-- Every table has created_at.
 
 create table if not exists projects (
   id uuid primary key default gen_random_uuid(),
