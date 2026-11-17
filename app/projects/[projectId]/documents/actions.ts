@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { EXTRACTION_MODEL, createExtractionClient, extractReceipt } from "@/lib/receipts/extract";
 import { validateReceipt } from "@/lib/receipts/schema";
 import { getProject } from "@/lib/queries";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
+import { deleteUpload, isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
 import { costSchema, uuidSchema } from "@/lib/validations";
 import type { CostFormState } from "@/app/projects/[projectId]/costs/actions";
 
@@ -36,34 +37,54 @@ export async function uploadReceipt(
   }
 
   const data = Buffer.from(await file.arrayBuffer());
+  const contentHash = createHash("sha256").update(data).digest("hex");
   const fileUrl = await saveUpload(projectId, file.type, data);
 
   const admin = getSupabaseAdmin();
-  const { data: inserted, error: insertError } = await admin
-    .from("documents")
-    .insert({ project_id: projectId, file_url: fileUrl, status: "pending" })
-    .select("id")
-    .single();
-  if (insertError) throw new Error(insertError.message, { cause: insertError });
-  const documentId = inserted.id;
+  const { data: started, error: startError } = await admin.rpc("start_document", {
+    p_project_id: projectId,
+    p_file_url: fileUrl,
+    p_content_hash: contentHash,
+  });
+  if (startError) throw new Error(startError.message, { cause: startError });
+  const [row] = started ?? [];
+  if (!row) throw new Error("start_document returned no row.");
+
+  // The same file was uploaded before. Keep the earlier document and skip the extraction call.
+  if (!row.created) {
+    await deleteUpload(fileUrl);
+    redirect(`/projects/${projectId}/documents/${row.document_id}`);
+  }
 
   const result = await extractReceipt(createExtractionClient(), { data, mediaType: file.type });
 
-  let update;
-  if (result.ok) {
-    const validation = validateReceipt(result.receipt);
-    const raw = { model: EXTRACTION_MODEL, attempts: result.attempts, output: result.receipt, validation };
-    // The schema allows any number, so clamp before it reaches the numeric(4,3) column.
-    const confidence = Math.min(1, Math.max(0, result.receipt.confidence));
-    update = { raw_extraction: raw, confidence, status: "extracted" };
-  } else {
-    update = { raw_extraction: { model: EXTRACTION_MODEL, attempts: result.attempts, error: result.error } };
-  }
-  const { error: updateError } = await admin.from("documents").update(update).eq("id", documentId);
-  if (updateError) throw new Error(updateError.message, { cause: updateError });
+  const { error: recordError } = await admin.rpc(
+    "record_extraction",
+    result.ok
+      ? {
+          p_project_id: projectId,
+          p_document_id: row.document_id,
+          p_raw_extraction: {
+            model: EXTRACTION_MODEL,
+            attempts: result.attempts,
+            output: result.receipt,
+            validation: validateReceipt(result.receipt),
+          },
+          // The schema allows any number, so clamp before it reaches the numeric(4,3) column.
+          p_confidence: Math.min(1, Math.max(0, result.receipt.confidence)),
+          p_status: "extracted",
+        }
+      // A failed extraction leaves the confidence and status alone, so the document stays pending.
+      : {
+          p_project_id: projectId,
+          p_document_id: row.document_id,
+          p_raw_extraction: { model: EXTRACTION_MODEL, attempts: result.attempts, error: result.error },
+        },
+  );
+  if (recordError) throw new Error(recordError.message, { cause: recordError });
 
   revalidatePath(`/projects/${projectId}`);
-  redirect(`/projects/${projectId}/documents/${documentId}`);
+  redirect(`/projects/${projectId}/documents/${row.document_id}`);
 }
 
 export async function confirmReceipt(

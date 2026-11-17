@@ -77,6 +77,7 @@ export type Database = {
       documents: {
         Row: {
           confidence: number | null;
+          content_hash: string | null;
           created_at: string;
           file_url: string;
           id: string;
@@ -87,6 +88,7 @@ export type Database = {
         ComputedFields: never;
         Insert: {
           confidence?: number | null;
+          content_hash?: string | null;
           created_at?: string;
           file_url: string;
           id?: string;
@@ -96,6 +98,7 @@ export type Database = {
         };
         Update: {
           confidence?: number | null;
+          content_hash?: string | null;
           created_at?: string;
           file_url?: string;
           id?: string;
@@ -201,6 +204,23 @@ export type Database = {
           p_vat_cents: number;
         };
         Returns: string;
+      };
+      record_extraction: {
+        Args: {
+          p_confidence?: number;
+          p_document_id: string;
+          p_project_id: string;
+          p_raw_extraction: Json;
+          p_status?: string;
+        };
+        Returns: boolean;
+      };
+      start_document: {
+        Args: { p_content_hash: string; p_file_url: string; p_project_id: string };
+        Returns: {
+          created: boolean;
+          document_id: string;
+        }[];
       };
     };
     Enums: {

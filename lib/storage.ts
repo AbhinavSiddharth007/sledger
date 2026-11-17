@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // Uploads live outside the bundle, so keep Turbopack from tracing the whole project.
@@ -34,11 +34,20 @@ function resolveUpload(relativePath: string) {
 }
 
 export async function readUpload(relativePath: string) {
+  return readFile(checkedUploadPath(relativePath));
+}
+
+// Removes a file saved by saveUpload, for example when the upload turned out to be a duplicate.
+export async function deleteUpload(relativePath: string) {
+  await rm(checkedUploadPath(relativePath), { force: true });
+}
+
+function checkedUploadPath(relativePath: string) {
   const fullPath = resolveUpload(relativePath);
   if (!fullPath.startsWith(UPLOAD_DIR + path.sep)) {
     throw new Error("Upload path is outside the uploads folder.");
   }
-  return readFile(fullPath);
+  return fullPath;
 }
 
 export function mediaTypeFor(relativePath: string) {
