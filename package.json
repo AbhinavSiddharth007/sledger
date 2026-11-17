@@ -10,6 +10,7 @@
     "db:seed": "node db/seed.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.7.0",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.0",

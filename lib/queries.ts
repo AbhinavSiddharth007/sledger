@@ -101,6 +101,74 @@ type CostRow = {
   status: string;
 };
 
+export type Document = {
+  id: string;
+  projectId: string;
+  fileUrl: string;
+  status: string;
+  confidence: number | null;
+  rawExtraction: RawExtraction | null;
+};
+
+// The shape of documents.raw_extraction, written by the upload action.
+export type RawExtraction = {
+  model: string;
+  attempts: { attempt: number; stopReason: string | null; text: string; error?: string }[];
+  output?: {
+    supplier: string;
+    date: string;
+    line_items: { description: string; qty: number; unit_price_cents: number; total_cents: number }[];
+    subtotal_cents: number;
+    vat_cents: number;
+    total_cents: number;
+    category: string;
+    confidence: number;
+  };
+  validation?: { issues: string[]; needsReview: boolean };
+  error?: string;
+};
+
+type DocumentRow = {
+  id: string;
+  project_id: string;
+  file_url: string;
+  status: string;
+  confidence: string | null;
+  raw_extraction: RawExtraction | null;
+};
+
+export async function listDocuments(projectId: string): Promise<Document[]> {
+  const { rows } = await pool.query(
+    `select * from documents where project_id = $1 order by created_at desc`,
+    [projectId],
+  );
+  return rows.map(toDocument);
+}
+
+export async function getDocument(projectId: string, documentId: string): Promise<Document | null> {
+  const { rows } = await pool.query(
+    `select * from documents where project_id = $1 and id = $2`,
+    [projectId, documentId],
+  );
+  return rows[0] ? toDocument(rows[0]) : null;
+}
+
+export async function getDocumentById(documentId: string): Promise<Document | null> {
+  const { rows } = await pool.query(`select * from documents where id = $1`, [documentId]);
+  return rows[0] ? toDocument(rows[0]) : null;
+}
+
+function toDocument(row: DocumentRow): Document {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    fileUrl: row.file_url,
+    status: row.status,
+    confidence: row.confidence === null ? null : Number(row.confidence),
+    rawExtraction: row.raw_extraction,
+  };
+}
+
 function toCost(row: CostRow): Cost {
   return {
     id: row.id,

@@ -11,6 +11,11 @@ const toCents = (amount: string) => Math.round(Number(amount.replace(",", ".")) 
 
 export const uuidSchema = z.uuid();
 
+export const responseSchema = z.object({
+  projectId: uuidSchema,
+  message: z.string().trim().min(1, "Message is required").max(1000),
+});
+
 export const costSchema = z
   .object({
     category: z.enum(COST_CATEGORIES, { error: "Choose a category" }),

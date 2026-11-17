@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CostsTable } from "@/components/costs-table";
+import { DocumentsList } from "@/components/documents-list";
+import { ReceiptUploadForm } from "@/components/receipt-upload-form";
 import { StatusBadge } from "@/components/status-badge";
 import { formatCents } from "@/lib/format";
-import { getProject, listCosts } from "@/lib/queries";
+import { getProject, listCosts, listDocuments } from "@/lib/queries";
 import { uuidSchema } from "@/lib/validations";
 
 export default async function ProjectPage({
@@ -18,6 +20,7 @@ export default async function ProjectPage({
   if (!project) notFound();
 
   const costs = await listCosts(projectId);
+  const documents = await listDocuments(projectId);
   const spentCents = costs.reduce((sum, cost) => sum + cost.amountCents, 0);
   const vatCents = costs.reduce((sum, cost) => sum + cost.vatCents, 0);
 
@@ -53,6 +56,14 @@ export default async function ProjectPage({
       </div>
 
       <CostsTable projectId={projectId} costs={costs} />
+
+      <section className="mt-10">
+        <h2 className="mb-4 text-lg font-semibold">Receipts</h2>
+        <div className="mb-4">
+          <ReceiptUploadForm projectId={projectId} />
+        </div>
+        <DocumentsList projectId={projectId} documents={documents} />
+      </section>
     </main>
   );
 }
