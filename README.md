@@ -90,9 +90,16 @@ Confirming a receipt is the one operation that must be all-or-nothing. It calls 
 A document can be confirmed only once: a second call returns `null` and inserts nothing, so a
 double submit cannot create a duplicate cost. The function is executable only by `service_role`.
 
-Receipts are uploaded through a server action and sent to Claude, which returns structured JSON.
-Its arithmetic is checked in code (line items against subtotal, subtotal plus VAT against total),
+Receipts are uploaded through a server action. The upload is hashed with SHA-256, and
+`start_document` creates the document or returns the existing one for the same hash in that
+project. A duplicate upload is therefore not extracted again: the server deletes the copy it just
+saved and redirects to the original. Only a new file goes to Claude. Its JSON result is written by
+`record_extraction` in one statement, which only touches a document that is still pending. Claude's
+arithmetic is then checked in code (line items against subtotal, subtotal plus VAT against total),
 and anything that fails is marked for review.
+
+A model call cannot run inside a database transaction, so the extraction write is atomic as a
+single statement rather than as a multi-step transaction.
 
 ### Database
 
