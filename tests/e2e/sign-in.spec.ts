@@ -14,7 +14,7 @@ test("a wrong password is reported next to the form", async ({ page }) => {
   await page.getByLabel("Password").fill("not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page.getByRole("alert")).toContainText(/invalid login credentials/i);
+  await expect(page.getByRole("alert").filter({ hasText: /invalid login credentials/i })).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });
 

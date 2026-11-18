@@ -21,7 +21,7 @@ test("a reviewed receipt is confirmed as a cost", async ({ page }) => {
   await page.getByRole("button", { name: "Confirm cost" }).click();
 
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`));
-  await expect(page.getByRole("cell", { name: "Ferretería E2E" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Ferretería E2E", exact: true })).toBeVisible();
 });
 
 test("rejecting a receipt updates the page at once", async ({ page }) => {

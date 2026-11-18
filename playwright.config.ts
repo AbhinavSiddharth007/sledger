@@ -20,10 +20,11 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run dev -- -p 3000",
+    // Production build, which is what users run. Dev mode is stricter about prerendering.
+    command: "npm run build && npm run start -- -p 3000",
     url: "http://127.0.0.1:3000/login",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 300_000,
     env,
   },
 });

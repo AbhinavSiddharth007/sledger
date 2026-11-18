@@ -132,7 +132,7 @@ export function CostsTable({ projectId, costs }: { projectId: string; costs: Cos
       {visible.length === 0 ? (
         <p className="text-zinc-500">No costs match these filters.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative min-w-0 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Costs for this project. Select a column heading to sort.</caption>
             <thead className="border-b text-zinc-500">

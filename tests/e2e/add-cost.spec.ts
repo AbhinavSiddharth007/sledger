@@ -24,7 +24,7 @@ test("a cost can be added and then appears in the project", async ({ page }) => 
   await page.getByRole("button", { name: "Save cost" }).click();
 
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}$`));
-  await expect(page.getByRole("cell", { name: "E2E Ferretería" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "E2E Ferretería", exact: true })).toBeVisible();
 });
 
 test("a bad amount is marked on its field, which takes focus", async ({ page }) => {
