@@ -99,3 +99,15 @@ export async function cleanUpUsers() {
     await admin.from("organizations").delete().eq("id", orgId);
   }
 }
+
+// Adds an existing user to an organization with the given role. Sign-up only creates owners, so
+// tests use this to make members and admins.
+export async function addMember(orgId: string, userId: string, role: "owner" | "admin" | "member") {
+  const { error } = await admin.from("org_members").insert({ org_id: orgId, user_id: userId, role });
+  if (error) throw error;
+}
+
+export async function setRole(orgId: string, userId: string, role: "owner" | "admin" | "member") {
+  const { error } = await admin.from("org_members").update({ role }).eq("org_id", orgId).eq("user_id", userId);
+  if (error) throw error;
+}
