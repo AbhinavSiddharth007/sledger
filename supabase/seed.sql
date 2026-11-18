@@ -1,10 +1,31 @@
 -- Sample data for local development. `supabase db reset` runs this after the migrations.
 -- Amounts are net EUR converted to cents; VAT is applied per project country.
+-- Never run this against a hosted project.
 
-insert into projects (id, name, client_name, budget_cents, status) values
-  ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'Reforma integral piso Calle Alcalá 45', 'Inmobiliaria Torres S.L.', 18500000, 'active'),
-  ('db125d7a-0539-43f1-9587-32d75140cc7e', 'Ampliación nave logística Getafe', 'Logística Mendoza S.A.', 42000000, 'active'),
-  ('3c2f4d4f-5676-4c30-bc43-882a2d89999d', 'Ristrutturazione bagno e cucina Via Brera 12', 'Studio Bianchi Architetti', 6850000, 'completed');
+-- A demo user to sign in with: demo@sledger.test / sledger-demo. The handle_new_user trigger
+-- gives it a workspace, and the sample projects belong to that workspace.
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, email_change, email_change_token_new, recovery_token
+) values (
+  '00000000-0000-0000-0000-000000000000', '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f',
+  'authenticated', 'authenticated', 'demo@sledger.test',
+  extensions.crypt('sledger-demo', extensions.gen_salt('bf')), now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+);
+
+insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+values (
+  gen_random_uuid(), '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f',
+  jsonb_build_object('sub', '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f', 'email', 'demo@sledger.test'),
+  'email', '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f', now(), now(), now()
+);
+
+insert into projects (id, name, client_name, budget_cents, status, tenant_id) values
+  ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'Reforma integral piso Calle Alcalá 45', 'Inmobiliaria Torres S.L.', 18500000, 'active', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
+  ('db125d7a-0539-43f1-9587-32d75140cc7e', 'Ampliación nave logística Getafe', 'Logística Mendoza S.A.', 42000000, 'active', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
+  ('3c2f4d4f-5676-4c30-bc43-882a2d89999d', 'Ristrutturazione bagno e cucina Via Brera 12', 'Studio Bianchi Architetti', 6850000, 'completed', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f'));
 
 insert into costs (project_id, category, supplier, description, amount_cents, vat_cents, cost_date, source, status) values
   ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'materials', 'Materiales Hermanos Ruiz S.L.', 'Tabiquería pladur y perfiles', 128040, 26888, '2025-02-03', 'manual', 'confirmed'),
