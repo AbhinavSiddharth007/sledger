@@ -32,7 +32,7 @@ export type Cost = {
 
 export type Project = {
   id: string;
-  tenantId: string;
+  orgId: string;
   name: string;
   clientName: string;
   budgetCents: number;
@@ -65,7 +65,7 @@ export async function getProject(projectId: string): Promise<Project | null> {
   const row = unwrap(
     await supabase
       .from("projects")
-      .select("id, tenant_id, name, client_name, budget_cents, status")
+      .select("id, org_id, name, client_name, budget_cents, status")
       .eq("id", projectId)
       .maybeSingle(),
   );
@@ -164,12 +164,12 @@ function unwrap<T>({ data, error }: { data: T | null; error: PostgrestError | nu
   return data;
 }
 
-type ProjectFields = Pick<ProjectRow, "id" | "tenant_id" | "name" | "client_name" | "budget_cents" | "status">;
+type ProjectFields = Pick<ProjectRow, "id" | "org_id" | "name" | "client_name" | "budget_cents" | "status">;
 
 function toProject(row: ProjectFields): Project {
   return {
     id: row.id,
-    tenantId: row.tenant_id,
+    orgId: row.org_id,
     name: row.name,
     clientName: row.client_name,
     budgetCents: row.budget_cents,

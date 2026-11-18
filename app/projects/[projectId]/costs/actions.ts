@@ -38,10 +38,10 @@ export async function createCost(
 
   const supabase = await createClient();
   const cost = parsed.data;
-  // The database trigger sets tenant_id from the project anyway. Passing it keeps the types honest.
+  // The database trigger sets org_id from the project anyway. Passing it keeps the types honest.
   const { error } = await supabase.from("costs").insert({
     project_id: projectId,
-    tenant_id: project.tenantId,
+    org_id: project.orgId,
     category: cost.category,
     supplier: cost.supplier,
     description: cost.description,

@@ -11,11 +11,11 @@ const PASSWORD = "test-password-123";
 
 export type TestUser = {
   userId: string;
-  tenantId: string;
+  orgId: string;
   client: SupabaseClient<Database>;
 };
 
-const created: { userId: string; tenantId: string }[] = [];
+const created: { userId: string; orgId: string }[] = [];
 
 export function anonymousClient() {
   return createClient<Database>(
@@ -41,21 +41,21 @@ export async function createSignedInUser(): Promise<TestUser> {
   if (signInError) throw signInError;
 
   const { data: membership, error: membershipError } = await admin
-    .from("memberships")
-    .select("tenant_id")
+    .from("org_members")
+    .select("org_id")
     .eq("user_id", data.user.id)
     .single();
   if (membershipError) throw membershipError;
 
-  const user = { userId: data.user.id, tenantId: membership.tenant_id, client };
-  created.push({ userId: user.userId, tenantId: user.tenantId });
+  const user = { userId: data.user.id, orgId: membership.org_id, client };
+  created.push({ userId: user.userId, orgId: user.orgId });
   return user;
 }
 
-export async function createProject(tenantId: string) {
+export async function createProject(orgId: string) {
   const { data, error } = await admin
     .from("projects")
-    .insert({ name: `Test ${randomUUID()}`, client_name: "Test client", budget_cents: 100000, tenant_id: tenantId })
+    .insert({ name: `Test ${randomUUID()}`, client_name: "Test client", budget_cents: 100000, org_id: orgId })
     .select("id")
     .single();
   if (error) throw error;
@@ -65,14 +65,14 @@ export async function createProject(tenantId: string) {
 export async function createDocument(projectId: string, status: string) {
   const { data: project, error: projectError } = await admin
     .from("projects")
-    .select("tenant_id")
+    .select("org_id")
     .eq("id", projectId)
     .single();
   if (projectError) throw projectError;
 
   const { data, error } = await admin
     .from("documents")
-    .insert({ project_id: projectId, tenant_id: project.tenant_id, file_url: `${projectId}/receipt.png`, status })
+    .insert({ project_id: projectId, org_id: project.org_id, file_url: `${projectId}/receipt.png`, status })
     .select("id")
     .single();
   if (error) throw error;
@@ -89,13 +89,13 @@ export async function countCosts(projectId: string) {
 }
 
 // Removes everything a test user created. Children go first, then the user, which removes its
-// membership, and last the tenant.
+// membership, and last the organization.
 export async function cleanUpUsers() {
-  for (const { userId, tenantId } of created.splice(0)) {
-    await admin.from("costs").delete().eq("tenant_id", tenantId);
-    await admin.from("documents").delete().eq("tenant_id", tenantId);
-    await admin.from("projects").delete().eq("tenant_id", tenantId);
+  for (const { userId, orgId } of created.splice(0)) {
+    await admin.from("costs").delete().eq("org_id", orgId);
+    await admin.from("documents").delete().eq("org_id", orgId);
+    await admin.from("projects").delete().eq("org_id", orgId);
     await admin.auth.admin.deleteUser(userId);
-    await admin.from("tenants").delete().eq("id", tenantId);
+    await admin.from("organizations").delete().eq("id", orgId);
   }
 }

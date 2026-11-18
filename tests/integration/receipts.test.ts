@@ -27,7 +27,7 @@ async function documentStatus(documentId: string) {
 describe("confirm_receipt", () => {
   it("turns an extracted receipt into one cost, owned by the project's workspace", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "extracted");
 
     const { data: costId, error } = await user.client.rpc("confirm_receipt", confirmArgs(projectId, documentId));
@@ -37,13 +37,13 @@ describe("confirm_receipt", () => {
     expect(await documentStatus(documentId)).toBe("confirmed");
     expect(await countCosts(projectId)).toBe(1);
 
-    const { data: cost } = await admin.from("costs").select("source, status, amount_cents, tenant_id").eq("id", costId!).single();
-    expect(cost).toEqual({ source: "ai_extracted", status: "needs_review", amount_cents: 186400, tenant_id: user.tenantId });
+    const { data: cost } = await admin.from("costs").select("source, status, amount_cents, org_id").eq("id", costId!).single();
+    expect(cost).toEqual({ source: "ai_extracted", status: "needs_review", amount_cents: 186400, org_id: user.orgId });
   });
 
   it("is idempotent: a second confirm inserts nothing and returns null", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "pending");
 
     await user.client.rpc("confirm_receipt", confirmArgs(projectId, documentId));
@@ -56,7 +56,7 @@ describe("confirm_receipt", () => {
 
   it("does not confirm a rejected document", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "rejected");
 
     const { data } = await user.client.rpc("confirm_receipt", confirmArgs(projectId, documentId));
@@ -67,7 +67,7 @@ describe("confirm_receipt", () => {
 
   it("rolls back the claim when the cost is invalid", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "extracted");
 
     const { error } = await user.client.rpc(
@@ -84,7 +84,7 @@ describe("confirm_receipt", () => {
 describe("start_document", () => {
   it("creates a document, then returns the same one for the same file", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const args = { p_project_id: projectId, p_file_url: `${projectId}/a.png`, p_content_hash: HASH };
 
     const { data: first, error: firstError } = await user.client.rpc("start_document", args);
@@ -99,8 +99,8 @@ describe("start_document", () => {
   it("treats the same file in another workspace's project as a new document", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const alicesProject = await createProject(alice.tenantId);
-    const bobsProject = await createProject(bob.tenantId);
+    const alicesProject = await createProject(alice.orgId);
+    const bobsProject = await createProject(bob.orgId);
 
     await alice.client.rpc("start_document", { p_project_id: alicesProject, p_file_url: "a.png", p_content_hash: HASH });
     const { data } = await bob.client.rpc("start_document", { p_project_id: bobsProject, p_file_url: "b.png", p_content_hash: HASH });
@@ -110,7 +110,7 @@ describe("start_document", () => {
 
   it("rejects a hash that is not 64 lowercase hex characters", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
 
     const { error } = await user.client.rpc("start_document", {
       p_project_id: projectId, p_file_url: "x.png", p_content_hash: "ABC",
@@ -123,7 +123,7 @@ describe("start_document", () => {
 describe("record_extraction", () => {
   it("writes the result and moves a pending document to extracted", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "pending");
 
     const { data: written, error } = await user.client.rpc("record_extraction", {
@@ -142,7 +142,7 @@ describe("record_extraction", () => {
 
   it("keeps a failed extraction pending, with the error recorded", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "pending");
 
     const { data: written } = await user.client.rpc("record_extraction", {
@@ -159,7 +159,7 @@ describe("record_extraction", () => {
 
   it("never overwrites a document that was already confirmed or rejected", async () => {
     const user = await createSignedInUser();
-    const projectId = await createProject(user.tenantId);
+    const projectId = await createProject(user.orgId);
     const documentId = await createDocument(projectId, "rejected");
 
     const { data: written } = await user.client.rpc("record_extraction", {

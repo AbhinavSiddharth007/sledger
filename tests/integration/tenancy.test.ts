@@ -7,19 +7,19 @@ describe("sign-up", () => {
   it("gives each new user a workspace of its own, with the user as owner", async () => {
     const user = await createSignedInUser();
 
-    const { data, error } = await user.client.from("memberships").select("tenant_id, role");
+    const { data, error } = await user.client.from("org_members").select("org_id, role");
 
     expect(error).toBeNull();
-    expect(data).toEqual([{ tenant_id: user.tenantId, role: "owner" }]);
+    expect(data).toEqual([{ org_id: user.orgId, role: "owner" }]);
   });
 });
 
-describe("tenant isolation", () => {
+describe("organization isolation", () => {
   it("shows a user only the projects in its own workspace", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const alicesProject = await createProject(alice.tenantId);
-    const bobsProject = await createProject(bob.tenantId);
+    const alicesProject = await createProject(alice.orgId);
+    const bobsProject = await createProject(bob.orgId);
 
     const { data, error } = await alice.client.from("projects").select("id");
 
@@ -31,10 +31,10 @@ describe("tenant isolation", () => {
   it("hides another workspace's documents and costs", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const bobsProject = await createProject(bob.tenantId);
+    const bobsProject = await createProject(bob.orgId);
     const bobsDocument = await createDocument(bobsProject, "extracted");
     await admin.from("costs").insert({
-      project_id: bobsProject, tenant_id: bob.tenantId, category: "other", supplier: "B", description: "x",
+      project_id: bobsProject, org_id: bob.orgId, category: "other", supplier: "B", description: "x",
       amount_cents: 500, cost_date: "2025-01-01", source: "manual",
     });
 
@@ -48,10 +48,10 @@ describe("tenant isolation", () => {
   it("refuses to write a cost into another workspace's project", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const bobsProject = await createProject(bob.tenantId);
+    const bobsProject = await createProject(bob.orgId);
 
     const { error } = await alice.client.from("costs").insert({
-      project_id: bobsProject, tenant_id: bob.tenantId, category: "other", supplier: "A", description: "x",
+      project_id: bobsProject, org_id: bob.orgId, category: "other", supplier: "A", description: "x",
       amount_cents: 500, cost_date: "2025-01-01", source: "manual",
     });
 
@@ -61,19 +61,19 @@ describe("tenant isolation", () => {
   it("refuses to move one of its own projects into another workspace", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const alicesProject = await createProject(alice.tenantId);
+    const alicesProject = await createProject(alice.orgId);
 
-    const { error } = await alice.client.from("projects").update({ tenant_id: bob.tenantId }).eq("id", alicesProject);
+    const { error } = await alice.client.from("projects").update({ org_id: bob.orgId }).eq("id", alicesProject);
 
     expect(error?.code).toBe("42501");
-    const { data } = await admin.from("projects").select("tenant_id").eq("id", alicesProject).single();
-    expect(data?.tenant_id).toBe(alice.tenantId);
+    const { data } = await admin.from("projects").select("org_id").eq("id", alicesProject).single();
+    expect(data?.org_id).toBe(alice.orgId);
   });
 
   it("does not let a user confirm or start documents in another workspace", async () => {
     const alice = await createSignedInUser();
     const bob = await createSignedInUser();
-    const bobsProject = await createProject(bob.tenantId);
+    const bobsProject = await createProject(bob.orgId);
     const bobsDocument = await createDocument(bobsProject, "extracted");
 
     const { data: confirmed } = await alice.client.rpc("confirm_receipt", {
@@ -99,15 +99,38 @@ describe("tenant isolation", () => {
     expect(data?.status).toBe("extracted");
   });
 
-  it("shows a user only its own membership and tenant", async () => {
+  it("shows a user only its own membership and organization", async () => {
     const alice = await createSignedInUser();
     await createSignedInUser();
 
-    const { data: tenants } = await alice.client.from("tenants").select("id");
-    const { data: memberships } = await alice.client.from("memberships").select("tenant_id");
+    const { data: organizations } = await alice.client.from("organizations").select("id");
+    const { data: members } = await alice.client.from("org_members").select("org_id");
 
-    expect(tenants?.map((row) => row.id)).toEqual([alice.tenantId]);
-    expect(memberships?.map((row) => row.tenant_id)).toEqual([alice.tenantId]);
+    expect(organizations?.map((row) => row.id)).toEqual([alice.orgId]);
+    expect(members?.map((row) => row.org_id)).toEqual([alice.orgId]);
+  });
+});
+
+describe("membership changes", () => {
+  it("do not let a user add itself to another organization", async () => {
+    const alice = await createSignedInUser();
+    const bob = await createSignedInUser();
+
+    const { error } = await alice.client
+      .from("org_members")
+      .insert({ org_id: bob.orgId, user_id: alice.userId, role: "owner" });
+
+    expect(error?.code).toBe("42501");
+    const { data } = await admin.from("org_members").select("user_id").eq("org_id", bob.orgId);
+    expect(data?.map((row) => row.user_id)).toEqual([bob.userId]);
+  });
+
+  it("do not let a user rename its organization", async () => {
+    const alice = await createSignedInUser();
+
+    const { error } = await alice.client.from("organizations").update({ name: "Hijacked" }).eq("id", alice.orgId);
+
+    expect(error?.code).toBe("42501");
   });
 });
 
@@ -115,7 +138,7 @@ describe("publishable key", () => {
   it("cannot read tables or call the receipt functions without signing in", async () => {
     const anon = anonymousClient();
     const user = await createSignedInUser();
-    const project = await createProject(user.tenantId);
+    const project = await createProject(user.orgId);
 
     const { error: readError } = await anon.from("projects").select("id");
     const { error: rpcError } = await anon.rpc("start_document", {
