@@ -93,6 +93,7 @@ export async function countCosts(projectId: string) {
 export async function cleanUpUsers() {
   for (const { userId, orgId } of created.splice(0)) {
     await admin.from("costs").delete().eq("org_id", orgId);
+    await admin.from("invoices").delete().eq("org_id", orgId);
     await admin.from("documents").delete().eq("org_id", orgId);
     await admin.from("projects").delete().eq("org_id", orgId);
     await admin.auth.admin.deleteUser(userId);
