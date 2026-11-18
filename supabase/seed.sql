@@ -22,10 +22,10 @@ values (
   'email', '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f', now(), now(), now()
 );
 
-insert into projects (id, name, client_name, budget_cents, status, tenant_id) values
-  ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'Reforma integral piso Calle Alcalá 45', 'Inmobiliaria Torres S.L.', 18500000, 'active', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
-  ('db125d7a-0539-43f1-9587-32d75140cc7e', 'Ampliación nave logística Getafe', 'Logística Mendoza S.A.', 42000000, 'active', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
-  ('3c2f4d4f-5676-4c30-bc43-882a2d89999d', 'Ristrutturazione bagno e cucina Via Brera 12', 'Studio Bianchi Architetti', 6850000, 'completed', (select tenant_id from memberships where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f'));
+insert into projects (id, name, client_name, budget_cents, status, org_id) values
+  ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'Reforma integral piso Calle Alcalá 45', 'Inmobiliaria Torres S.L.', 18500000, 'active', (select org_id from org_members where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
+  ('db125d7a-0539-43f1-9587-32d75140cc7e', 'Ampliación nave logística Getafe', 'Logística Mendoza S.A.', 42000000, 'active', (select org_id from org_members where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f')),
+  ('3c2f4d4f-5676-4c30-bc43-882a2d89999d', 'Ristrutturazione bagno e cucina Via Brera 12', 'Studio Bianchi Architetti', 6850000, 'completed', (select org_id from org_members where user_id = '5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f'));
 
 insert into costs (project_id, category, supplier, description, amount_cents, vat_cents, cost_date, source, status) values
   ('4cbe336e-0074-45c2-a4ec-211d421e0fd5', 'materials', 'Materiales Hermanos Ruiz S.L.', 'Tabiquería pladur y perfiles', 128040, 26888, '2025-02-03', 'manual', 'confirmed'),
