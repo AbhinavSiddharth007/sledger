@@ -176,6 +176,27 @@ delete. `roles.test.ts` covers members and admins, and `tenancy.test.ts` covers 
 Known gaps, not yet built: inviting people to an organization, changing roles, and removing
 members. Email confirmation is off in local development, so sign-up works without an email.
 
+## Invoicing
+
+Invoices live in the `invoices` table, scoped to an organization and protected by the same RLS
+rules as every other table.
+
+- **Numbers.** Invoices are numbered `INV-<year>-<sequence>`, with one sequence per organization and
+  year. `create_invoice` takes the next number from a counter row. Creates that happen at the same
+  time queue on that row lock, so no two get the same number. The counter and the invoice are written
+  in one transaction, so a failed insert returns its number and leaves no gap. The unique
+  `(org_id, number)` constraint backs this up. The migration has the full explanation.
+- **Status.** `draft` → `sent` → `paid`, with `overdue` for a sent invoice whose due date has passed.
+  A trigger enforces the flow, so no client can skip a step. A draft can be edited. Once sent, the
+  amount and dates are locked, and the number never changes.
+- **Overdue.** A `pg_cron` job runs `mark_overdue_invoices()` every 15 minutes. The function is
+  executable by the server and the scheduler only.
+- **Money.** Invoiced means every invoice except drafts. Outstanding is invoiced less paid. Margin is
+  invoiced less confirmed costs. Everything is net, before VAT. The arithmetic lives in
+  `lib/invoicing.ts`, which has unit tests.
+- **Cash flow.** `/projects/cash-flow` shows money in (paid invoices, dated by payment) and money out
+  (confirmed costs, dated by cost date) by month, with the running balance.
+
 ## Why Supabase
 
 - **A real Postgres with a migration history.** The schema is plain SQL in version control, and
