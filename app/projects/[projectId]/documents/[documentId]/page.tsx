@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CostForm } from "@/components/cost-form";
-import { StatusBadge } from "@/components/status-badge";
+import { ReviewPanel } from "@/components/review-panel";
 import { formatCents } from "@/lib/format";
 import { getDocument, getProject, type RawExtraction } from "@/lib/queries";
 import { uuidSchema } from "@/lib/validations";
-import { confirmReceipt, rejectReceipt } from "../actions";
 
+// Server Component: loads the receipt and its extraction. The confirm and reject controls are a
+// client component, which receives these notices and line items as slots.
 export default async function ReviewReceiptPage({
   params,
 }: {
@@ -25,51 +25,31 @@ export default async function ReviewReceiptPage({
   const output = raw?.output;
   const isPdf = document.fileUrl.endsWith(".pdf");
   const previewUrl = `/api/documents/${document.id}`;
-  const reviewable = document.status === "pending" || document.status === "extracted";
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8">
-      <Link href={`/projects/${projectId}`} className="text-sm text-zinc-500 hover:underline">
+    <main id="main" className="mx-auto w-full max-w-6xl px-4 py-8">
+      <Link href={`/projects/${projectId}`} className="text-sm text-zinc-600 underline-offset-2 hover:underline">
         ← {project.name}
       </Link>
-      <header className="mt-2 mb-6 flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Review receipt</h1>
-        <StatusBadge status={document.status} />
-      </header>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <section>
+      <div className="mt-4 grid gap-8 lg:grid-cols-2">
+        <section aria-label="Receipt preview" className="min-w-0">
           {isPdf ? (
-            <iframe src={previewUrl} title="Receipt" className="h-[80vh] w-full rounded border" />
+            <iframe src={previewUrl} title="Receipt" className="h-[60vh] w-full rounded border lg:h-[80vh]" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="Receipt" className="w-full rounded border" />
+            <img src={previewUrl} alt="Receipt to review" className="w-full rounded border" />
           )}
         </section>
 
-        <section className="grid gap-6">
-          <Notices raw={raw} />
-
-          {reviewable ? (
-            <CostForm
-              action={confirmReceipt.bind(null, projectId, documentId)}
-              projectId={projectId}
-              defaults={output ? toDefaults(output, raw?.validation?.needsReview) : {}}
-            />
-          ) : (
-            <p className="text-zinc-500">This receipt has already been {document.status}.</p>
-          )}
-
-          {reviewable && (
-            <form action={rejectReceipt.bind(null, projectId, documentId)}>
-              <button type="submit" className="text-sm text-red-600 hover:underline">
-                Reject this receipt
-              </button>
-            </form>
-          )}
-
-          {output && <LineItems output={output} />}
-        </section>
+        <ReviewPanel
+          projectId={projectId}
+          documentId={documentId}
+          status={document.status}
+          defaults={output ? toDefaults(output, raw?.validation?.needsReview) : {}}
+          before={<Notices raw={raw} />}
+          after={output ? <LineItems output={output} /> : null}
+        />
       </div>
     </main>
   );
@@ -78,7 +58,7 @@ export default async function ReviewReceiptPage({
 function Notices({ raw }: { raw: RawExtraction | null }) {
   if (raw?.error) {
     return (
-      <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+      <div role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900">
         Extraction failed after {raw.attempts.length} attempt(s): {raw.error} Fill in the fields manually.
       </div>
     );
@@ -86,7 +66,7 @@ function Notices({ raw }: { raw: RawExtraction | null }) {
 
   if (raw?.validation?.issues.length) {
     return (
-      <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
         <p className="mb-1 font-medium">Check these before confirming:</p>
         <ul className="list-disc pl-5">
           {raw.validation.issues.map((issue) => (
@@ -102,14 +82,17 @@ function Notices({ raw }: { raw: RawExtraction | null }) {
 
 function LineItems({ output }: { output: NonNullable<RawExtraction["output"]> }) {
   return (
-    <div>
-      <h2 className="mb-2 font-semibold">Extracted line items</h2>
+    <section aria-labelledby="line-items-heading" className="overflow-x-auto">
+      <h2 id="line-items-heading" className="mb-2 font-semibold">
+        Extracted line items
+      </h2>
       <table className="w-full text-left text-sm">
-        <thead className="border-b text-zinc-500">
+        <caption className="sr-only">Line items read from the receipt</caption>
+        <thead className="border-b text-zinc-600">
           <tr>
-            <th className="py-1 pr-3 font-medium">Description</th>
-            <th className="py-1 pr-3 text-right font-medium">Qty</th>
-            <th className="py-1 pr-3 text-right font-medium">Total</th>
+            <th scope="col" className="py-1 pr-3 font-medium">Description</th>
+            <th scope="col" className="py-1 pr-3 text-right font-medium">Qty</th>
+            <th scope="col" className="py-1 pr-3 text-right font-medium">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -122,7 +105,7 @@ function LineItems({ output }: { output: NonNullable<RawExtraction["output"]> })
           ))}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }
 
