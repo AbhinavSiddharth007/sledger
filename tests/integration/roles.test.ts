@@ -34,7 +34,7 @@ describe("members", () => {
     await addMember(owner.orgId, member.userId, "member");
 
     const { error: insertError } = await member.client.from("costs").insert({
-      project_id: projectId, category: "labour", supplier: "B", description: "y",
+      project_id: projectId, org_id: owner.orgId, category: "labour", supplier: "B", description: "y",
       amount_cents: 700, cost_date: "2025-01-02", source: "manual",
     });
     const { error: updateError } = await member.client.from("costs").update({ amount_cents: 800 }).eq("project_id", projectId);
