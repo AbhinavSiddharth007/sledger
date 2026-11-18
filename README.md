@@ -102,8 +102,9 @@ session cannot read or write any row.
   owner. A project belongs to one organization. Its costs, documents and invoices take the
   organization from the project, so the four cannot disagree.
 - **Roles.** `org_members` links a user to an organization with a role: `owner`, `admin` or
-  `member`. Every new organization starts with one owner. Row level security currently gives all
-  three roles the same access to the organization's rows. Role-based limits are not built yet.
+  `member`. Every new organization starts with one owner. Every member can read the organization's
+  projects, costs, documents, invoices and members, and can insert and update them. Only owners and
+  admins can delete them. Members who are not owners or admins cannot delete.
 - **Profiles.** `profiles` holds one row per user, created by a trigger on `auth.users`. Users can
   read their own profile and change their name. Their email comes from Auth and cannot be changed
   through the profile.
