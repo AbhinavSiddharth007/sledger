@@ -13,14 +13,12 @@ You need Node.js 22 or newer, and Docker. Docker runs the local Supabase stack.
 
 ```bash
 npm install
-cp .env.example .env.local      # then set ANTHROPIC_API_KEY
 npm run db:start                # starts Postgres, Auth and the API in Docker
 npm run db:reset                # applies migrations and loads supabase/seed.sql
 npm run db:env                  # writes .env.test.local from the running stack
 ```
 
-`npm run db:start` prints the local URL and keys. Copy the publishable key and the secret key
-into `.env.local`:
+`npm run db:start` prints the local URL and keys. Create `.env.local` with them, plus your Anthropic key:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
