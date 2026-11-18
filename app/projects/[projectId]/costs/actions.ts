@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getProject } from "@/lib/queries";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { costSchema, uuidSchema } from "@/lib/validations";
 
 export type CostFormState = {
@@ -26,7 +26,8 @@ export async function createCost(
   _previous: CostFormState,
   formData: FormData,
 ): Promise<CostFormState> {
-  if (!uuidSchema.safeParse(projectId).success || !(await getProject(projectId))) {
+  const project = uuidSchema.safeParse(projectId).success ? await getProject(projectId) : null;
+  if (!project) {
     return { formError: "Project not found." };
   }
 
@@ -35,9 +36,12 @@ export async function createCost(
     return invalid(parsed.error, formData);
   }
 
+  const supabase = await createClient();
   const cost = parsed.data;
-  const { error } = await getSupabaseAdmin().from("costs").insert({
+  // The database trigger sets tenant_id from the project anyway. Passing it keeps the types honest.
+  const { error } = await supabase.from("costs").insert({
     project_id: projectId,
+    tenant_id: project.tenantId,
     category: cost.category,
     supplier: cost.supplier,
     description: cost.description,
@@ -69,8 +73,9 @@ export async function updateCost(
     return invalid(parsed.error, formData);
   }
 
+  const supabase = await createClient();
   const cost = parsed.data;
-  const { data, error } = await getSupabaseAdmin()
+  const { data, error } = await supabase
     .from("costs")
     .update({
       category: cost.category,

@@ -1,7 +1,7 @@
 import "server-only";
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 type CostRow = Database["public"]["Tables"]["costs"]["Row"];
@@ -32,6 +32,7 @@ export type Cost = {
 
 export type Project = {
   id: string;
+  tenantId: string;
   name: string;
   clientName: string;
   budgetCents: number;
@@ -39,8 +40,9 @@ export type Project = {
 };
 
 export async function listProjects(): Promise<ProjectSummary[]> {
+  const supabase = await createClient();
   const rows = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("projects")
       .select("id, name, client_name, budget_cents, status, costs(amount_cents)")
       .order("created_at", { ascending: false })
@@ -59,10 +61,11 @@ export async function listProjects(): Promise<ProjectSummary[]> {
 }
 
 export async function getProject(projectId: string): Promise<Project | null> {
+  const supabase = await createClient();
   const row = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("projects")
-      .select("id, name, client_name, budget_cents, status")
+      .select("id, tenant_id, name, client_name, budget_cents, status")
       .eq("id", projectId)
       .maybeSingle(),
   );
@@ -70,8 +73,9 @@ export async function getProject(projectId: string): Promise<Project | null> {
 }
 
 export async function listCosts(projectId: string): Promise<Cost[]> {
+  const supabase = await createClient();
   const rows = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("costs")
       .select("*")
       .eq("project_id", projectId)
@@ -82,8 +86,9 @@ export async function listCosts(projectId: string): Promise<Cost[]> {
 }
 
 export async function getCost(projectId: string, costId: string): Promise<Cost | null> {
+  const supabase = await createClient();
   const row = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("costs")
       .select("*")
       .eq("project_id", projectId)
@@ -121,8 +126,9 @@ export type RawExtraction = {
 };
 
 export async function listDocuments(projectId: string): Promise<Document[]> {
+  const supabase = await createClient();
   const rows = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("documents")
       .select("*")
       .eq("project_id", projectId)
@@ -132,8 +138,9 @@ export async function listDocuments(projectId: string): Promise<Document[]> {
 }
 
 export async function getDocument(projectId: string, documentId: string): Promise<Document | null> {
+  const supabase = await createClient();
   const row = unwrap(
-    await getSupabaseAdmin()
+    await supabase
       .from("documents")
       .select("*")
       .eq("project_id", projectId)
@@ -144,8 +151,9 @@ export async function getDocument(projectId: string, documentId: string): Promis
 }
 
 export async function getDocumentById(documentId: string): Promise<Document | null> {
+  const supabase = await createClient();
   const row = unwrap(
-    await getSupabaseAdmin().from("documents").select("*").eq("id", documentId).maybeSingle(),
+    await supabase.from("documents").select("*").eq("id", documentId).maybeSingle(),
   );
   return row ? toDocument(row) : null;
 }
@@ -156,11 +164,12 @@ function unwrap<T>({ data, error }: { data: T | null; error: PostgrestError | nu
   return data;
 }
 
-type ProjectFields = Pick<ProjectRow, "id" | "name" | "client_name" | "budget_cents" | "status">;
+type ProjectFields = Pick<ProjectRow, "id" | "tenant_id" | "name" | "client_name" | "budget_cents" | "status">;
 
 function toProject(row: ProjectFields): Project {
   return {
     id: row.id,
+    tenantId: row.tenant_id,
     name: row.name,
     clientName: row.client_name,
     budgetCents: row.budget_cents,

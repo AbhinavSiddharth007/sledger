@@ -35,6 +35,7 @@ export type Database = {
           source: string;
           status: string;
           supplier: string;
+          tenant_id: string;
           vat_cents: number;
         };
         ComputedFields: never;
@@ -49,6 +50,7 @@ export type Database = {
           source: string;
           status?: string;
           supplier: string;
+          tenant_id: string;
           vat_cents?: number;
         };
         Update: {
@@ -62,6 +64,7 @@ export type Database = {
           source?: string;
           status?: string;
           supplier?: string;
+          tenant_id?: string;
           vat_cents?: number;
         };
         Relationships: [
@@ -70,6 +73,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "costs_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
             referencedColumns: ["id"];
           },
         ];
@@ -84,6 +94,7 @@ export type Database = {
           project_id: string;
           raw_extraction: Json | null;
           status: string;
+          tenant_id: string;
         };
         ComputedFields: never;
         Insert: {
@@ -95,6 +106,7 @@ export type Database = {
           project_id: string;
           raw_extraction?: Json | null;
           status?: string;
+          tenant_id: string;
         };
         Update: {
           confidence?: number | null;
@@ -105,6 +117,7 @@ export type Database = {
           project_id?: string;
           raw_extraction?: Json | null;
           status?: string;
+          tenant_id?: string;
         };
         Relationships: [
           {
@@ -112,6 +125,13 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "documents_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
             referencedColumns: ["id"];
           },
         ];
@@ -126,6 +146,7 @@ export type Database = {
           number: string;
           project_id: string;
           status: string;
+          tenant_id: string;
         };
         ComputedFields: never;
         Insert: {
@@ -137,6 +158,7 @@ export type Database = {
           number: string;
           project_id: string;
           status?: string;
+          tenant_id: string;
         };
         Update: {
           amount_cents?: number;
@@ -147,6 +169,7 @@ export type Database = {
           number?: string;
           project_id?: string;
           status?: string;
+          tenant_id?: string;
         };
         Relationships: [
           {
@@ -154,6 +177,43 @@ export type Database = {
             columns: ["project_id"];
             isOneToOne: false;
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoices_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      memberships: {
+        Row: {
+          created_at: string;
+          role: string;
+          tenant_id: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          role?: string;
+          tenant_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          role?: string;
+          tenant_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "memberships_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
             referencedColumns: ["id"];
           },
         ];
@@ -166,6 +226,7 @@ export type Database = {
           id: string;
           name: string;
           status: string;
+          tenant_id: string;
         };
         ComputedFields: never;
         Insert: {
@@ -175,6 +236,7 @@ export type Database = {
           id?: string;
           name: string;
           status?: string;
+          tenant_id: string;
         };
         Update: {
           budget_cents?: number;
@@ -183,6 +245,34 @@ export type Database = {
           id?: string;
           name?: string;
           status?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "projects_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tenants: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
         };
         Relationships: [];
       };
@@ -205,6 +295,7 @@ export type Database = {
         };
         Returns: string;
       };
+      is_tenant_member: { Args: { p_tenant_id: string }; Returns: boolean };
       record_extraction: {
         Args: {
           p_confidence?: number;

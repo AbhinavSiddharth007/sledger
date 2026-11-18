@@ -7,7 +7,7 @@ import { z } from "zod";
 import { EXTRACTION_MODEL, createExtractionClient, extractReceipt } from "@/lib/receipts/extract";
 import { validateReceipt } from "@/lib/receipts/schema";
 import { getProject } from "@/lib/queries";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { deleteUpload, isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
 import { costSchema, uuidSchema } from "@/lib/validations";
 import type { CostFormState } from "@/app/projects/[projectId]/costs/actions";
@@ -40,8 +40,8 @@ export async function uploadReceipt(
   const contentHash = createHash("sha256").update(data).digest("hex");
   const fileUrl = await saveUpload(projectId, file.type, data);
 
-  const admin = getSupabaseAdmin();
-  const { data: started, error: startError } = await admin.rpc("start_document", {
+  const supabase = await createClient();
+  const { data: started, error: startError } = await supabase.rpc("start_document", {
     p_project_id: projectId,
     p_file_url: fileUrl,
     p_content_hash: contentHash,
@@ -58,7 +58,7 @@ export async function uploadReceipt(
 
   const result = await extractReceipt(createExtractionClient(), { data, mediaType: file.type });
 
-  const { error: recordError } = await admin.rpc(
+  const { error: recordError } = await supabase.rpc(
     "record_extraction",
     result.ok
       ? {
@@ -105,8 +105,9 @@ export async function confirmReceipt(
     };
   }
 
+  const supabase = await createClient();
   // One transaction in Postgres: claims the document and inserts the cost, or neither.
-  const { data: costId, error } = await getSupabaseAdmin().rpc("confirm_receipt", {
+  const { data: costId, error } = await supabase.rpc("confirm_receipt", {
     p_project_id: projectId,
     p_document_id: documentId,
     p_category: parsed.data.category,
@@ -134,7 +135,8 @@ export async function rejectReceipt(projectId: string, documentId: string) {
     return;
   }
 
-  const { error } = await getSupabaseAdmin()
+  const supabase = await createClient();
+  const { error } = await supabase
     .from("documents")
     .update({ status: "rejected" })
     .eq("id", documentId)
