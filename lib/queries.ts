@@ -158,6 +158,69 @@ export async function getDocumentById(documentId: string): Promise<Document | nu
   return row ? toDocument(row) : null;
 }
 
+export type Invoice = {
+  id: string;
+  projectId: string;
+  number: string;
+  amountCents: number;
+  issuedAt: string;
+  dueAt: string;
+  status: string;
+  paidAt: string | null;
+};
+
+type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+
+export async function listInvoices(projectId: string): Promise<Invoice[]> {
+  const supabase = await createClient();
+  const rows = unwrap(
+    await supabase
+      .from("invoices")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("issued_at", { ascending: false })
+      .order("number", { ascending: false }),
+  ) ?? [];
+  return rows.map(toInvoice);
+}
+
+export async function getInvoice(projectId: string, invoiceId: string): Promise<Invoice | null> {
+  const supabase = await createClient();
+  const row = unwrap(
+    await supabase.from("invoices").select("*").eq("project_id", projectId).eq("id", invoiceId).maybeSingle(),
+  );
+  return row ? toInvoice(row) : null;
+}
+
+// Every invoice and cost in the signed-in user's organization, for the cash flow view. RLS limits
+// the rows to the organization.
+export async function listCashFlowInputs() {
+  const supabase = await createClient();
+  const [invoices, costs] = await Promise.all([
+    supabase.from("invoices").select("amount_cents, status, paid_at"),
+    supabase.from("costs").select("amount_cents, status, cost_date"),
+  ]);
+  const invoiceRows = unwrap(invoices) ?? [];
+  const costRows = unwrap(costs) ?? [];
+  return {
+    paid: invoiceRows.map((row) => ({ amountCents: row.amount_cents, paidAt: row.paid_at })),
+    costs: costRows.map((row) => ({ amountCents: row.amount_cents, status: row.status, costDate: row.cost_date })),
+  };
+}
+
+function toInvoice(row: InvoiceRow): Invoice {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    number: row.number,
+    amountCents: row.amount_cents,
+    issuedAt: row.issued_at,
+    dueAt: row.due_at,
+    status: row.status,
+    paidAt: row.paid_at,
+  };
+}
+
 // Supabase returns an error object instead of throwing, so turn it into an exception.
 function unwrap<T>({ data, error }: { data: T | null; error: PostgrestError | null }): T | null {
   if (error) throw new Error(error.message, { cause: error });

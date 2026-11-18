@@ -114,7 +114,7 @@ export function CostForm({
   );
 }
 
-const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600";
+export const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600";
 export const INPUT = `w-full rounded border border-zinc-300 px-3 py-2 ${FOCUS} aria-[invalid=true]:border-red-600`;
 const BUTTON = `rounded px-4 py-2 ${FOCUS}`;
 
@@ -127,7 +127,7 @@ type FieldProps = {
 };
 
 // A label tied to its input by id, with the errors and hint linked through aria-describedby.
-function Field({
+export function Field({
   label,
   name,
   errors,

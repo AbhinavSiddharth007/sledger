@@ -37,3 +37,21 @@ export const costSchema = z
   }));
 
 export type CostInput = z.output<typeof costSchema>;
+
+export const invoiceSchema = z
+  .object({
+    amount: euroAmount,
+    issuedAt: z.iso.date("Enter a valid issue date"),
+    dueAt: z.iso.date("Enter a valid due date"),
+  })
+  .refine((data) => data.dueAt >= data.issuedAt, {
+    message: "The due date cannot be before the issue date",
+    path: ["dueAt"],
+  })
+  .transform((data) => ({
+    amountCents: toCents(data.amount),
+    issuedAt: data.issuedAt,
+    dueAt: data.dueAt,
+  }));
+
+export type InvoiceInput = z.output<typeof invoiceSchema>;

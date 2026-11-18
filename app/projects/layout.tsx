@@ -22,12 +22,17 @@ async function SiteHeader() {
   const { data } = await supabase.auth.getClaims();
 
   return (
-    <header className="flex items-center justify-between border-b px-6 py-3 text-sm">
-      <Link href="/projects" className="font-semibold">
-        Sledger
-      </Link>
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b px-4 py-3 text-sm sm:px-6">
+      <div className="flex items-center gap-6">
+        <Link href="/projects" className="font-semibold">
+          Sledger
+        </Link>
+        <Link href="/projects/cash-flow" className="text-zinc-700 underline-offset-2 hover:underline">
+          Cash flow
+        </Link>
+      </div>
       <div className="flex items-center gap-4">
-        <span className="text-zinc-600">{data?.claims.email}</span>
+        <span className="min-w-0 truncate text-zinc-600">{data?.claims.email}</span>
         <form action={signOut}>
           <button type="submit" className="rounded border px-3 py-1">
             Sign out
