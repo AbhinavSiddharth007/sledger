@@ -24,6 +24,7 @@ into `.env.local`:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<PUBLISHABLE_KEY from npm run db:start>
 SUPABASE_SECRET_KEY=<SECRET_KEY from npm run db:start>
 ANTHROPIC_API_KEY=<your key>
@@ -35,7 +36,11 @@ Then start the app:
 npm run dev                     # http://localhost:3000
 ```
 
-Studio, the local Supabase dashboard, is at http://127.0.0.1:54323.
+Studio, the local Supabase dashboard, is at http://127.0.0.1:54323. Magic-link emails land in
+Mailpit at http://127.0.0.1:54324.
+
+To sign in with the seeded account, open http://127.0.0.1:3000/login and use
+`demo@sledger.test` with password `sledger-demo`. It exists only in local development.
 
 ### Commands
 
@@ -60,9 +65,9 @@ app/                 Next.js routes, server components and server actions
 api/api.ts           handlers behind the REST routes
 components/          UI pieces
 lib/
-  queries.ts         reads. Server-only.
+  queries.ts         reads, as the signed-in user. Server-only.
   supabase/
-    admin.ts         server-only client with the secret key. Used by queries and actions.
+    admin.ts         server-only client with the secret key. Used by tests and the seed, never by the app.
     server.ts        @supabase/ssr client that reads and writes cookies, for user-scoped code
     browser.ts       @supabase/ssr client for client components
     config.ts        reads the public URL and publishable key
@@ -80,10 +85,30 @@ tests/
 
 ### Data flow
 
-Pages and server actions run on the server. They use the admin client, which holds the secret key
-and bypasses row level security. The browser never talks to the database directly. Every table
-has RLS on and no policies, and `anon` and `authenticated` have no table grants. So the publishable
-key, which ships to the browser, cannot read or write anything.
+Pages, server actions and route handlers run on the server with the signed-in user's session
+(`lib/supabase/server.ts`). Postgres checks every read and write against that user with row level
+security, so the app never filters by tenant itself. The secret key is used only by tests and the
+seed.
+
+The publishable key, which ships to the browser, has no table grants at all. A request without a
+session cannot read or write any row.
+
+### Sign-in and tenancy
+
+- **Sign-in.** `/login` offers email and password, account creation, and a magic link. Magic
+  links return to `/auth/callback`, which exchanges the one-time code for a session.
+- **Sessions.** `proxy.ts` runs before every request. It refreshes the session with
+  `getClaims()`, which verifies the JWT, and redirects signed-out visitors to `/login`. API calls
+  get a `401` instead of a redirect.
+- **Workspaces.** Every new sign-up gets a workspace, called a tenant, with the user as its owner.
+  A project belongs to one tenant. Its costs, documents and invoices take the tenant from the
+  project, so the four cannot disagree.
+- **Isolation.** Members of a tenant can read and write its rows. A user cannot read another
+  tenant's rows, write a row into another tenant, or move one of their own rows into another
+  tenant. The receipt functions run as the caller, so the same rules apply to them.
+
+Inviting someone to an existing workspace is not built yet. Each user currently has a workspace
+to itself.
 
 Confirming a receipt is the one operation that must be all-or-nothing. It calls the
 `confirm_receipt` function, which claims the document and inserts the cost in one transaction.
