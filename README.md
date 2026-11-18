@@ -140,6 +140,42 @@ single statement rather than as a multi-step transaction.
   against production.
 - Money is `bigint` cents with CHECK constraints on every amount. Floats never store money.
 
+## Security model
+
+Each layer assumes the one above it can fail, so the database is the last line of defence.
+
+- **Database.** Row level security is on for every table in `public`. A signed-in user reads and
+  writes only the rows of organizations it belongs to. Membership checks live in the `private`
+  schema, which the Data API does not expose, and they are `SECURITY DEFINER` with an empty
+  `search_path`. Deletes need the `owner` or `admin` role.
+- **Grants.** Supabase grants new tables every privilege by default. The migrations take back what
+  is not needed. `anon` has no grants on any table or function. `authenticated` reads and writes
+  only through RLS, and cannot change `profiles.email`, `organizations` or `org_members`.
+- **Keys.** The publishable key is safe in the browser, and on its own it can reach no rows. The
+  secret key bypasses RLS, so it is read only in tests and the seed. It is never prefixed with
+  `NEXT_PUBLIC_`.
+- **Proxy.** `proxy.ts` runs before every request. It verifies the session with `getClaims()`,
+  refreshes it, and redirects signed-out visitors to `/login`. API routes get a `401`.
+- **Server Actions.** Every exported action calls `requireUser()` (which runs `getClaims()`) before
+  it does anything else. The sign-in, sign-up and magic-link actions call `redirectIfSignedIn()`
+  instead, since they exist to create a session. A test reads every action file and fails if one
+  does not check first.
+- **Route handlers.** The document download checks `getClaims()` itself, so it does not rely on
+  the proxy alone.
+- **Sign-up.** A new user gets an organization of its own, with the user as its owner. This
+  happens in a trigger on `auth.users`, so it cannot be skipped by the client.
+- **Uploads.** Receipt files are written under `uploads/`, and the server refuses any path that
+  leaves that folder. Files are named with random UUIDs, and a duplicate upload is not stored twice.
+- **Secrets.** Environment files are git-ignored. The variable list is in this README, and no
+  real value appears in the repository.
+
+The tests that prove these rules are in `tests/integration`. `cross-org.test.ts` shows that a user
+of one organization gets nothing from another: no rows on read, no change on update, no removal on
+delete. `roles.test.ts` covers members and admins, and `tenancy.test.ts` covers the rest.
+
+Known gaps, not yet built: inviting people to an organization, changing roles, and removing
+members. Email confirmation is off in local development, so sign-up works without an email.
+
 ## Why Supabase
 
 - **A real Postgres with a migration history.** The schema is plain SQL in version control, and
