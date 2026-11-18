@@ -136,6 +136,33 @@ export type Database = {
           },
         ];
       };
+      invoice_counters: {
+        Row: {
+          last_number: number;
+          org_id: string;
+          year: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          last_number?: number;
+          org_id: string;
+          year: number;
+        };
+        Update: {
+          last_number?: number;
+          org_id?: string;
+          year?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invoice_counters_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       invoices: {
         Row: {
           amount_cents: number;
@@ -145,6 +172,7 @@ export type Database = {
           issued_at: string;
           number: string;
           org_id: string;
+          paid_at: string | null;
           project_id: string;
           status: string;
         };
@@ -157,6 +185,7 @@ export type Database = {
           issued_at: string;
           number: string;
           org_id: string;
+          paid_at?: string | null;
           project_id: string;
           status?: string;
         };
@@ -168,6 +197,7 @@ export type Database = {
           issued_at?: string;
           number?: string;
           org_id?: string;
+          paid_at?: string | null;
           project_id?: string;
           status?: string;
         };
@@ -317,7 +347,16 @@ export type Database = {
         };
         Returns: string;
       };
-      is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      create_invoice: {
+        Args: {
+          p_amount_cents: number;
+          p_due_at: string;
+          p_issued_at: string;
+          p_project_id: string;
+        };
+        Returns: string;
+      };
+      mark_overdue_invoices: { Args: Record<PropertyKey, never>; Returns: number };
       record_extraction: {
         Args: {
           p_confidence?: number;
