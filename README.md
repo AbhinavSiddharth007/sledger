@@ -87,7 +87,7 @@ tests/
 
 Pages, server actions and route handlers run on the server with the signed-in user's session
 (`lib/supabase/server.ts`). Postgres checks every read and write against that user with row level
-security, so the app never filters by tenant itself. The secret key is used only by tests and the
+security, so the app never filters by organization itself. The secret key is used only by tests and the
 seed.
 
 The publishable key, which ships to the browser, has no table grants at all. A request without a
@@ -100,15 +100,22 @@ session cannot read or write any row.
 - **Sessions.** `proxy.ts` runs before every request. It refreshes the session with
   `getClaims()`, which verifies the JWT, and redirects signed-out visitors to `/login`. API calls
   get a `401` instead of a redirect.
-- **Workspaces.** Every new sign-up gets a workspace, called a tenant, with the user as its owner.
-  A project belongs to one tenant. Its costs, documents and invoices take the tenant from the
-  project, so the four cannot disagree.
-- **Isolation.** Members of a tenant can read and write its rows. A user cannot read another
-  tenant's rows, write a row into another tenant, or move one of their own rows into another
-  tenant. The receipt functions run as the caller, so the same rules apply to them.
+- **Organizations.** Every new sign-up gets an organization (`organizations`), with the user as its
+  owner. A project belongs to one organization. Its costs, documents and invoices take the
+  organization from the project, so the four cannot disagree.
+- **Roles.** `org_members` links a user to an organization with a role: `owner`, `admin` or
+  `member`. Every new organization starts with one owner. Row level security currently gives all
+  three roles the same access to the organization's rows. Role-based limits are not built yet.
+- **Profiles.** `profiles` holds one row per user, created by a trigger on `auth.users`. Users can
+  read their own profile and change their name. Their email comes from Auth and cannot be changed
+  through the profile.
+- **Isolation.** Members of an organization can read and write its rows. A user cannot read another
+  organization's rows, write a row into another organization, move one of their own rows into
+  another organization, or add itself to one. The receipt functions run as the caller, so the same
+  rules apply to them.
 
-Inviting someone to an existing workspace is not built yet. Each user currently has a workspace
-to itself.
+Inviting someone to an existing organization is not built yet. Each user currently has an
+organization to itself.
 
 Confirming a receipt is the one operation that must be all-or-nothing. It calls the
 `confirm_receipt` function, which claims the document and inserts the cost in one transaction.
