@@ -7,7 +7,7 @@ import { z } from "zod";
 import { EXTRACTION_MODEL, createExtractionClient, extractReceipt } from "@/lib/receipts/extract";
 import { validateReceipt } from "@/lib/receipts/schema";
 import { getProject } from "@/lib/queries";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
 import { deleteUpload, isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
 import { costSchema, uuidSchema } from "@/lib/validations";
 import type { CostFormState } from "@/app/projects/[projectId]/costs/actions";
@@ -21,6 +21,7 @@ export async function uploadReceipt(
   _previous: UploadState,
   formData: FormData,
 ): Promise<UploadState> {
+  const { supabase } = await requireUser();
   if (!uuidSchema.safeParse(projectId).success || !(await getProject(projectId))) {
     return { formError: "Project not found." };
   }
@@ -40,7 +41,6 @@ export async function uploadReceipt(
   const contentHash = createHash("sha256").update(data).digest("hex");
   const fileUrl = await saveUpload(projectId, file.type, data);
 
-  const supabase = await createClient();
   const { data: started, error: startError } = await supabase.rpc("start_document", {
     p_project_id: projectId,
     p_file_url: fileUrl,
@@ -93,6 +93,7 @@ export async function confirmReceipt(
   _previous: CostFormState,
   formData: FormData,
 ): Promise<CostFormState> {
+  const { supabase } = await requireUser();
   if (!uuidSchema.safeParse(projectId).success || !uuidSchema.safeParse(documentId).success) {
     return { formError: "Document not found." };
   }
@@ -105,7 +106,6 @@ export async function confirmReceipt(
     };
   }
 
-  const supabase = await createClient();
   // One transaction in Postgres: claims the document and inserts the cost, or neither.
   const { data: costId, error } = await supabase.rpc("confirm_receipt", {
     p_project_id: projectId,
@@ -131,11 +131,11 @@ export async function confirmReceipt(
 }
 
 export async function rejectReceipt(projectId: string, documentId: string) {
+  const { supabase } = await requireUser();
   if (!uuidSchema.safeParse(projectId).success || !uuidSchema.safeParse(documentId).success) {
     return;
   }
 
-  const supabase = await createClient();
   const { error } = await supabase
     .from("documents")
     .update({ status: "rejected" })

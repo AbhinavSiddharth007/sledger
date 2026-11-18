@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { redirectIfSignedIn, requireUser } from "@/lib/auth";
 
 const credentialsSchema = z.object({
   email: z.email("Enter a valid email address."),
@@ -18,10 +18,10 @@ function loginUrl(params: Record<string, string>) {
 }
 
 export async function signInWithPassword(formData: FormData) {
+  const supabase = await redirectIfSignedIn();
   const parsed = credentialsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(loginUrl({ error: parsed.error.issues[0].message }));
 
-  const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) redirect(loginUrl({ error: error.message }));
 
@@ -29,10 +29,10 @@ export async function signInWithPassword(formData: FormData) {
 }
 
 export async function signUpWithPassword(formData: FormData) {
+  const supabase = await redirectIfSignedIn();
   const parsed = credentialsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(loginUrl({ error: parsed.error.issues[0].message }));
 
-  const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp(parsed.data);
   if (error) redirect(loginUrl({ error: error.message }));
 
@@ -42,10 +42,10 @@ export async function signUpWithPassword(formData: FormData) {
 }
 
 export async function sendMagicLink(formData: FormData) {
+  const supabase = await redirectIfSignedIn();
   const parsed = emailSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect(loginUrl({ error: parsed.error.issues[0].message }));
 
-  const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,
     options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback` },
@@ -56,7 +56,7 @@ export async function sendMagicLink(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = await createClient();
+  const { supabase } = await requireUser();
   await supabase.auth.signOut();
   redirect("/login");
 }
