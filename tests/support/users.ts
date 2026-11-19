@@ -94,6 +94,7 @@ export async function cleanUpUsers() {
   for (const { userId, orgId } of created.splice(0)) {
     await admin.from("costs").delete().eq("org_id", orgId);
     await admin.from("invoices").delete().eq("org_id", orgId);
+    await removeReceiptFiles(orgId);
     await admin.from("documents").delete().eq("org_id", orgId);
     await admin.from("projects").delete().eq("org_id", orgId);
     await admin.auth.admin.deleteUser(userId);
@@ -111,4 +112,16 @@ export async function addMember(orgId: string, userId: string, role: "owner" | "
 export async function setRole(orgId: string, userId: string, role: "owner" | "admin" | "member") {
   const { error } = await admin.from("org_members").update({ role }).eq("org_id", orgId).eq("user_id", userId);
   if (error) throw error;
+}
+
+// Removes every stored receipt under an organization's folder. Each project folder is listed and
+// emptied, so no test leaves files behind in the receipts bucket.
+export async function removeReceiptFiles(orgId: string) {
+  const bucket = admin.storage.from("receipts");
+  const { data: projects } = await bucket.list(orgId);
+  for (const project of projects ?? []) {
+    const { data: files } = await bucket.list(`${orgId}/${project.name}`);
+    const paths = (files ?? []).map((file) => `${orgId}/${project.name}/${file.name}`);
+    if (paths.length > 0) await bucket.remove(paths);
+  }
 }
