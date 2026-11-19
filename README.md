@@ -164,8 +164,13 @@ Each layer assumes the one above it can fail, so the database is the last line o
   the proxy alone.
 - **Sign-up.** A new user gets an organization of its own, with the user as its owner. This
   happens in a trigger on `auth.users`, so it cannot be skipped by the client.
-- **Uploads.** Receipt files are written under `uploads/`, and the server refuses any path that
-  leaves that folder. Files are named with random UUIDs, and a duplicate upload is not stored twice.
+- **Uploads.** Receipt files are stored in a private Supabase Storage bucket, `receipts`, at
+  `<org_id>/<project_id>/<sha256>.<ext>`. Storage policies allow a member to read, upload and delete
+  only under its own organization's folder, and only into a project that belongs to that
+  organization. Deletes are limited to owners and admins. The bucket itself refuses files over 10 MB
+  and any type other than PDF, JPEG, PNG or WebP. A file's hash is its name, so a repeat upload is
+  refused by storage and recognised as a duplicate, not stored twice. The review page shows the
+  original through a signed link that expires after five minutes.
 - **Secrets.** Environment files are git-ignored. The variable list is in this README, and no
   real value appears in the repository.
 

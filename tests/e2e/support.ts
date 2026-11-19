@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { copyFileSync, mkdirSync, rmSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
@@ -8,7 +8,6 @@ import { createClient } from "@supabase/supabase-js";
 export const DEMO = { email: "demo@sledger.test", password: "sledger-demo" };
 export const DEMO_USER_ID = "5e1d6e2a-7b3c-4f8a-9d0e-1a2b3c4d5e6f";
 export const FIXTURE = path.join(__dirname, "fixtures", "receipt.png");
-const UPLOADS = path.join(process.cwd(), "uploads");
 
 // Test code talks to the database with the secret key, to set up and clean up its own data.
 // Nothing here runs in the browser.
@@ -49,28 +48,38 @@ export async function createTestProject() {
   return { id: data.id, orgId: data.org_id };
 }
 
-// Removes a test project with everything in it, including the uploaded files on disk.
+// Removes a test project with everything in it, including its receipt files in storage.
 export async function removeTestProject(projectId: string) {
+  const { data: project } = await admin.from("projects").select("org_id").eq("id", projectId).single();
+  if (project) {
+    const folder = project.org_id + "/" + projectId;
+    const { data: files } = await admin.storage.from("receipts").list(folder);
+    const paths = (files ?? []).map((file) => folder + "/" + file.name);
+    if (paths.length > 0) await admin.storage.from("receipts").remove(paths);
+  }
   await admin.from("costs").delete().eq("project_id", projectId);
   await admin.from("documents").delete().eq("project_id", projectId);
   await admin.from("projects").delete().eq("id", projectId);
-  rmSync(path.join(UPLOADS, projectId), { recursive: true, force: true });
 }
 
 // A receipt that has already been read, so the review page can be tested without calling Claude.
 export async function createExtractedReceipt(projectId: string, orgId: string, supplier: string) {
-  const fileName = `${randomUUID()}.png`;
-  const relativePath = path.join(projectId, fileName);
-  const folder = path.join(UPLOADS, projectId);
-  mkdirSync(folder, { recursive: true });
-  copyFileSync(FIXTURE, path.join(folder, fileName));
+  // Same layout as the app: <org>/<project>/<sha256>.<ext>. The app's path helper is server-only,
+  // so the path is built here.
+  const bytes = readFileSync(FIXTURE);
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  const storagePath = orgId + "/" + projectId + "/" + hash + ".png";
+  const { error: uploadError } = await admin.storage
+    .from("receipts")
+    .upload(storagePath, bytes, { contentType: "image/png", upsert: true });
+  if (uploadError) throw uploadError;
 
   const { data, error } = await admin
     .from("documents")
     .insert({
       project_id: projectId,
       org_id: orgId,
-      file_url: relativePath,
+      file_url: storagePath,
       status: "extracted",
       confidence: 0.95,
       raw_extraction: {
