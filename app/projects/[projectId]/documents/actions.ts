@@ -8,7 +8,7 @@ import { EXTRACTION_MODEL, createExtractionClient, extractReceipt } from "@/lib/
 import { validateReceipt } from "@/lib/receipts/schema";
 import { getProject } from "@/lib/queries";
 import { requireUser } from "@/lib/auth";
-import { deleteUpload, isAllowedMediaType, MAX_UPLOAD_BYTES, saveUpload } from "@/lib/storage";
+import { isAlreadyStored, isAllowedMediaType, MAX_UPLOAD_BYTES, receiptPath, storeReceipt } from "@/lib/storage";
 import { costSchema, uuidSchema } from "@/lib/validations";
 import type { CostFormState } from "@/app/projects/[projectId]/costs/actions";
 
@@ -22,7 +22,8 @@ export async function uploadReceipt(
   formData: FormData,
 ): Promise<UploadState> {
   const { supabase } = await requireUser();
-  if (!uuidSchema.safeParse(projectId).success || !(await getProject(projectId))) {
+  const project = uuidSchema.safeParse(projectId).success ? await getProject(projectId) : null;
+  if (!project) {
     return { formError: "Project not found." };
   }
 
@@ -39,11 +40,17 @@ export async function uploadReceipt(
 
   const data = Buffer.from(await file.arrayBuffer());
   const contentHash = createHash("sha256").update(data).digest("hex");
-  const fileUrl = await saveUpload(projectId, file.type, data);
+  // The path is the hash, so a repeat upload finds the file already there. Storage refuses it, and
+  // the document lookup below returns the earlier receipt. Nothing is stored twice.
+  const path = receiptPath(project.orgId, projectId, contentHash, file.type);
+  const stored = await storeReceipt(supabase, path, data, file.type);
+  if (stored.error && !isAlreadyStored(stored.error)) {
+    throw new Error(stored.error.message, { cause: stored.error });
+  }
 
   const { data: started, error: startError } = await supabase.rpc("start_document", {
     p_project_id: projectId,
-    p_file_url: fileUrl,
+    p_file_url: path,
     p_content_hash: contentHash,
   });
   if (startError) throw new Error(startError.message, { cause: startError });
@@ -52,7 +59,6 @@ export async function uploadReceipt(
 
   // The same file was uploaded before. Keep the earlier document and skip the extraction call.
   if (!row.created) {
-    await deleteUpload(fileUrl);
     redirect(`/projects/${projectId}/documents/${row.document_id}`);
   }
 

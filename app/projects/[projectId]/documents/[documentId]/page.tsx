@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ReviewPanel } from "@/components/review-panel";
 import { formatCents } from "@/lib/format";
 import { getDocument, getProject, type RawExtraction } from "@/lib/queries";
+import { signedReceiptUrl } from "@/lib/storage";
+import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validations";
 
 // Server Component: loads the receipt and its extraction. The confirm and reject controls are a
@@ -24,7 +26,9 @@ export default async function ReviewReceiptPage({
   const raw = document.rawExtraction;
   const output = raw?.output;
   const isPdf = document.fileUrl.endsWith(".pdf");
-  const previewUrl = `/api/documents/${document.id}`;
+  // A short-lived signed link to the stored file. It is created as the signed-in user, so storage
+  // policies decide whether it is issued at all.
+  const previewUrl = await signedReceiptUrl(await createClient(), document.fileUrl);
 
   return (
     <main id="main" className="mx-auto w-full max-w-6xl px-4 py-8">

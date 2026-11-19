@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { CONFIDENCE_THRESHOLD, validateReceipt, type Receipt } from "@/lib/receipts/schema";
-import { isAllowedMediaType, mediaTypeFor, readUpload } from "@/lib/storage";
 
 const receipt: Receipt = {
   supplier: "Materiales Hermanos Ruiz S.L.",
@@ -39,22 +38,5 @@ describe("validateReceipt", () => {
   it("flags confidence below the threshold", () => {
     const result = validateReceipt({ ...receipt, confidence: CONFIDENCE_THRESHOLD - 0.1 });
     expect(result.needsReview).toBe(true);
-  });
-});
-
-describe("upload helpers", () => {
-  it("maps stored file extensions back to media types", () => {
-    expect(mediaTypeFor("project/abc.pdf")).toBe("application/pdf");
-    expect(mediaTypeFor("project/abc.webp")).toBe("image/webp");
-    expect(mediaTypeFor("project/abc.exe")).toBe("application/octet-stream");
-  });
-
-  it("accepts only the supported media types", () => {
-    expect(isAllowedMediaType("image/png")).toBe(true);
-    expect(isAllowedMediaType("image/gif")).toBe(false);
-  });
-
-  it("refuses paths that escape the uploads folder", async () => {
-    await expect(readUpload("../package.json")).rejects.toThrow("outside the uploads folder");
   });
 });

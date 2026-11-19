@@ -1,13 +1,12 @@
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
 import { getDocumentById } from "@/lib/queries";
-import { mediaTypeFor, readUpload } from "@/lib/storage";
+import { signedReceiptUrl } from "@/lib/storage";
+import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validations";
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ documentId: string }> },
-) {
-  // The proxy checks the session too. This route checks again, so it holds if it is reached directly.
+// Sends the browser to a short-lived signed link for the receipt. The document lookup and the link
+// both run as the signed-in user, so storage and row level security decide who gets the file.
+export async function GET(_request: Request, { params }: { params: Promise<{ documentId: string }> }) {
   const { data: claims } = await (await createClient()).auth.getClaims();
   if (!claims) {
     return new Response("Unauthorized", { status: 401 });
@@ -23,11 +22,6 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const data = await readUpload(document.fileUrl);
-  return new Response(new Uint8Array(data), {
-    headers: {
-      "Content-Type": mediaTypeFor(document.fileUrl),
-      "Cache-Control": "private, no-cache",
-    },
-  });
+  const url = await signedReceiptUrl(await createClient(), document.fileUrl);
+  return NextResponse.redirect(url, { headers: { "Cache-Control": "private, no-store" } });
 }
